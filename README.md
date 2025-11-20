@@ -20,6 +20,7 @@ This course is using the :sparkles: open source project [reveal.js](https://gith
 2. 上传或拖拽你的 PDF 题库，等待解析完成。
 3. 点击“随机出题”即可从任意页面生成截图，配合“下载当前截图”保存题目图片。
 4. 若想要题目讲解，可在页面内填写支持视觉模型的 OpenAI 兼容接口地址与 API Key，点击“AI 解析”后会直接在浏览器调用接口生成解析，并配合进度条查看当前解析状态。
+5. 如果直接用 `file://` 双击打开，浏览器可能拦截 CDN worker 请求。页面会自动退回单线程解析，若仍遇到加载问题，可按 `script/pdfjs/README.txt` 提示下载本地备份。
 
 页面内置 pdf.js，无需后台服务即可运行，适合快速刷题或制作题目卡片。
 

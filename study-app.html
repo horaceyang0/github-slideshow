@@ -452,7 +452,51 @@
       .panel .inputs { grid-template-columns: 1fr; }
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.9.179/build/pdf.min.js"></script>
+  <script>
+    const PDFJS_CDN_SCRIPT = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.9.179/build/pdf.min.js";
+    const PDFJS_CDN_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.9.179/build/pdf.worker.min.js";
+    const PDFJS_LOCAL_SCRIPT = "script/pdfjs/pdf.min.js";
+    const PDFJS_LOCAL_WORKER = "script/pdfjs/pdf.worker.min.js";
+
+    window._pdfjsReady = new Promise((resolve, reject) => {
+      function finish(workerSrc) {
+        if (window.pdfjsLib) {
+          const isFileProto = window.location.protocol === "file:";
+          if (isFileProto && workerSrc.startsWith("http")) {
+            // 在直接双击打开的场景下，浏览器会阻止跨域加载 worker，这里退回单线程模式保证仍可使用。
+            pdfjsLib.disableWorker = true;
+            resolve(window.pdfjsLib);
+            return;
+          }
+
+          pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+          resolve(window.pdfjsLib);
+        } else {
+          reject(new Error("pdf.js 载入后未暴露 pdfjsLib"));
+        }
+      }
+
+      function loadScript(src, workerSrc, fallback) {
+        const script = document.createElement("script");
+        script.src = src;
+        script.onload = () => finish(workerSrc);
+        script.onerror = () => {
+          if (fallback) {
+            fallback();
+          } else {
+            reject(new Error("无法加载 pdf.js，请检查网络或确认本地备份文件存在。"));
+          }
+        };
+        document.head.appendChild(script);
+      }
+
+      loadScript(PDFJS_CDN_SCRIPT, PDFJS_CDN_WORKER, () => {
+        loadScript(PDFJS_LOCAL_SCRIPT, PDFJS_LOCAL_WORKER, () =>
+          reject(new Error("pdf.js 加载失败，CDN 与本地备份均不可用。"))
+        );
+      });
+    });
+  </script>
 </head>
 <body>
   <div class="app">
@@ -524,265 +568,279 @@
   <canvas id="renderCanvas" style="display:none;"></canvas>
 
   <script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.9.179/build/pdf.worker.min.js";
+    window._pdfjsReady
+      .then(() => {
+        const fileInput = document.getElementById("fileInput");
+        const randomBtn = document.getElementById("randomBtn");
+        const saveBtn = document.getElementById("saveBtn");
+        const analyzeBtn = document.getElementById("analyzeBtn");
+        const statusEl = document.getElementById("status");
+        const preview = document.getElementById("preview");
+        const app = document.querySelector(".app");
+        const canvas = document.getElementById("renderCanvas");
+        const ctx = canvas.getContext("2d");
+        const apiUrlInput = document.getElementById("apiUrl");
+        const apiKeyInput = document.getElementById("apiKey");
+        const progressCard = document.getElementById("progressCard");
+        const progressFill = document.getElementById("progressFill");
+        const progressValue = document.getElementById("progressValue");
+        const progressNote = document.getElementById("progressNote");
 
-    const fileInput = document.getElementById("fileInput");
-    const randomBtn = document.getElementById("randomBtn");
-    const saveBtn = document.getElementById("saveBtn");
-    const analyzeBtn = document.getElementById("analyzeBtn");
-    const statusEl = document.getElementById("status");
-    const preview = document.getElementById("preview");
-    const app = document.querySelector(".app");
-    const canvas = document.getElementById("renderCanvas");
-    const ctx = canvas.getContext("2d");
-    const apiUrlInput = document.getElementById("apiUrl");
-    const apiKeyInput = document.getElementById("apiKey");
-    const progressCard = document.getElementById("progressCard");
-    const progressFill = document.getElementById("progressFill");
-    const progressValue = document.getElementById("progressValue");
-    const progressNote = document.getElementById("progressNote");
+        const DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
+        apiUrlInput.value = DEFAULT_API_URL;
 
-    const DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
-    apiUrlInput.value = DEFAULT_API_URL;
+        let pdfDoc = null;
+        let lastImageUrl = "";
+        let usedPages = new Set();
+        let progressTimer = null;
+        let currentProgress = 0;
 
-    let pdfDoc = null;
-    let lastImageUrl = "";
-    let usedPages = new Set();
-    let progressTimer = null;
-    let currentProgress = 0;
+        function setStatus(message) {
+          statusEl.querySelector("span:last-child").textContent = message;
+        }
 
-    function setStatus(message) {
-      statusEl.querySelector("span:last-child").textContent = message;
-    }
+        function updateProgress(percent = 0, note = "") {
+          currentProgress = Math.max(0, Math.min(100, percent));
+          progressFill.style.width = `${currentProgress}%`;
+          progressValue.textContent = `${Math.round(currentProgress)}%`;
+          if (note) {
+            progressNote.textContent = note;
+          }
+        }
 
-    function updateProgress(percent = 0, note = "") {
-      currentProgress = Math.max(0, Math.min(100, percent));
-      progressFill.style.width = `${currentProgress}%`;
-      progressValue.textContent = `${Math.round(currentProgress)}%`;
-      if (note) {
-        progressNote.textContent = note;
-      }
-    }
+        function startProgress(note = "准备解析…", initial = 8) {
+          clearInterval(progressTimer);
+          progressCard.dataset.active = "true";
+          updateProgress(initial, note);
+        }
 
-    function startProgress(note = "准备解析…", initial = 8) {
-      clearInterval(progressTimer);
-      progressCard.dataset.active = "true";
-      updateProgress(initial, note);
-    }
+        function easeProgress(target = 85, step = 1.5, interval = 280) {
+          clearInterval(progressTimer);
+          progressTimer = setInterval(() => {
+            if (currentProgress >= target) return;
+            updateProgress(currentProgress + step);
+          }, interval);
+        }
 
-    function easeProgress(target = 85, step = 1.5, interval = 280) {
-      clearInterval(progressTimer);
-      progressTimer = setInterval(() => {
-        if (currentProgress >= target) return;
-        updateProgress(currentProgress + step);
-      }, interval);
-    }
+        function finishProgress(note = "解析完成", delay = 900) {
+          clearInterval(progressTimer);
+          updateProgress(100, note);
+          setTimeout(() => {
+            progressCard.dataset.active = "false";
+            updateProgress(0, "等待任务开始…");
+          }, delay);
+        }
 
-    function finishProgress(note = "解析完成", delay = 900) {
-      clearInterval(progressTimer);
-      updateProgress(100, note);
-      setTimeout(() => {
-        progressCard.dataset.active = "false";
-        updateProgress(0, "等待任务开始…");
-      }, delay);
-    }
+        function resetState(message = "等待上传 PDF 题库…") {
+          pdfDoc = null;
+          usedPages = new Set();
+          lastImageUrl = "";
+          randomBtn.disabled = true;
+          saveBtn.disabled = true;
+          analyzeBtn.disabled = true;
+          preview.innerHTML = `<div class="empty">${message}</div>`;
+        }
 
-    function resetState(message = "等待上传 PDF 题库…") {
-      pdfDoc = null;
-      usedPages = new Set();
-      lastImageUrl = "";
-      randomBtn.disabled = true;
-      saveBtn.disabled = true;
-      analyzeBtn.disabled = true;
-      preview.innerHTML = `<div class="empty">${message}</div>`;
-    }
+        function isPdfFile(file) {
+          return file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
+        }
 
-    function isPdfFile(file) {
-      return file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
-    }
+        function pickRandomPageNumber() {
+          if (!pdfDoc) return null;
+          if (usedPages.size === pdfDoc.numPages) {
+            usedPages.clear();
+          }
+          let pageNumber;
+          do {
+            pageNumber = Math.floor(Math.random() * pdfDoc.numPages) + 1;
+          } while (usedPages.has(pageNumber));
+          usedPages.add(pageNumber);
+          return pageNumber;
+        }
 
-    function pickRandomPageNumber() {
-      if (!pdfDoc) return null;
-      if (usedPages.size === pdfDoc.numPages) {
-        usedPages.clear();
-      }
-      let pageNumber;
-      do {
-        pageNumber = Math.floor(Math.random() * pdfDoc.numPages) + 1;
-      } while (usedPages.has(pageNumber));
-      usedPages.add(pageNumber);
-      return pageNumber;
-    }
+        async function loadPdf(file) {
+          const fileData = await file.arrayBuffer();
+          startProgress("正在解析 PDF…", 12);
+          easeProgress(82);
+          pdfDoc = await pdfjsLib.getDocument({ data: fileData }).promise;
+          usedPages.clear();
+          setStatus(`已加载「${file.name}」，共 ${pdfDoc.numPages} 页，可点击“随机出题”。`);
+          randomBtn.disabled = true;
+          saveBtn.disabled = false;
+          analyzeBtn.disabled = true;
+          await showRandomPage();
+          randomBtn.disabled = false;
+          finishProgress("PDF 解析完成");
+        }
 
-    async function loadPdf(file) {
-      const fileData = await file.arrayBuffer();
-      startProgress("正在解析 PDF…", 12);
-      easeProgress(82);
-      pdfDoc = await pdfjsLib.getDocument({ data: fileData }).promise;
-      usedPages.clear();
-      setStatus(`已加载「${file.name}」，共 ${pdfDoc.numPages} 页，可点击“随机出题”。`);
-      randomBtn.disabled = true;
-      saveBtn.disabled = false;
-      analyzeBtn.disabled = true;
-      await showRandomPage();
-      randomBtn.disabled = false;
-      finishProgress("PDF 解析完成");
-    }
-
-    async function showRandomPage() {
-      if (!pdfDoc) return;
-      const pageNumber = pickRandomPageNumber();
-      if (!pageNumber) return;
-      setStatus(`正在生成第 ${pageNumber} 页的截图（已出题 ${usedPages.size} / ${pdfDoc.numPages} 页）…`);
-      const page = await pdfDoc.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 1.5 });
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      lastImageUrl = canvas.toDataURL("image/png");
-      preview.innerHTML = `
+        async function showRandomPage() {
+          if (!pdfDoc) return;
+          const pageNumber = pickRandomPageNumber();
+          if (!pageNumber) return;
+          setStatus(`正在生成第 ${pageNumber} 页的截图（已出题 ${usedPages.size} / ${pdfDoc.numPages} 页）…`);
+          const page = await pdfDoc.getPage(pageNumber);
+          const viewport = page.getViewport({ scale: 1.5 });
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          lastImageUrl = canvas.toDataURL("image/png");
+          preview.innerHTML = `
         <div class="caption"><span>随机题目</span><span>第 ${pageNumber} 页 / 共 ${pdfDoc.numPages} 页</span></div>
         <img src="${lastImageUrl}" alt="第 ${pageNumber} 页截图">
         <div class="analysis-output" id="analysisOutput">AI 解析尚未开始，点击上方按钮获取讲解。</div>
       `;
-      analyzeBtn.disabled = false;
-      setStatus("已出题，点击按钮可继续随机切换。");
-    }
+          analyzeBtn.disabled = false;
+          setStatus("已出题，点击按钮可继续随机切换。");
+        }
 
-    function downloadImage() {
-      if (!lastImageUrl) return;
-      const link = document.createElement("a");
-      link.href = lastImageUrl;
-      link.download = "quiz-screenshot.png";
-      link.click();
-    }
+        function downloadImage() {
+          if (!lastImageUrl) return;
+          const link = document.createElement("a");
+          link.href = lastImageUrl;
+          link.download = "quiz-screenshot.png";
+          link.click();
+        }
 
-    function handleFileSelection(file) {
-      if (!file) {
-        setStatus("未检测到文件，请重新尝试。");
-        return;
-      }
-      if (!isPdfFile(file)) {
-        setStatus("仅支持 PDF 文件，请重新选择。");
-        resetState("仅支持 PDF 文件，请重新选择。");
-        return;
-      }
-      setStatus("正在解析 PDF…");
-      randomBtn.disabled = true;
-      saveBtn.disabled = true;
-      analyzeBtn.disabled = true;
-      loadPdf(file).catch((error) => {
-        console.error(error);
-        setStatus("解析失败，请确认文件为有效的 PDF。");
-        preview.innerHTML = '<div class="empty">加载失败，请重新上传。</div>';
-        finishProgress("解析失败");
-      });
-    }
+        function handleFileSelection(file) {
+          if (!file) {
+            setStatus("未检测到文件，请重新尝试。");
+            return;
+          }
+          if (!isPdfFile(file)) {
+            setStatus("仅支持 PDF 文件，请重新选择。");
+            resetState("仅支持 PDF 文件，请重新选择。");
+            return;
+          }
+          setStatus("正在解析 PDF…");
+          randomBtn.disabled = true;
+          saveBtn.disabled = true;
+          analyzeBtn.disabled = true;
+          loadPdf(file).catch((error) => {
+            console.error(error);
+            setStatus("解析失败，请确认文件为有效的 PDF。");
+            preview.innerHTML = '<div class="empty">加载失败，请重新上传。</div>';
+            finishProgress("解析失败");
+          });
+        }
 
-    function getAnalysisOutput() {
-      return document.getElementById("analysisOutput");
-    }
+        function getAnalysisOutput() {
+          return document.getElementById("analysisOutput");
+        }
 
-    function updateAnalysis(text) {
-      const output = getAnalysisOutput();
-      if (output) {
-        output.textContent = text;
-      }
-    }
+        function updateAnalysis(text) {
+          const output = getAnalysisOutput();
+          if (output) {
+            output.textContent = text;
+          }
+        }
 
-    async function analyzeImage() {
-      if (!lastImageUrl) {
-        setStatus("请先生成题目后再尝试 AI 解析。");
-        return;
-      }
-      const apiUrl = (apiUrlInput.value || DEFAULT_API_URL).trim();
-      const apiKey = apiKeyInput.value.trim();
-      if (!apiKey) {
-        setStatus("请填写 API Key（仅在本地使用，不会上传保存）。");
-        return;
-      }
-      analyzeBtn.disabled = true;
-      updateAnalysis("AI 正在解题，请稍候…");
-      setStatus("正在向 AI 请求解析…");
-      startProgress("AI 正在解析题目…", 15);
-      easeProgress(88, 1.2, 320);
-      try {
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [
-              {
-                role: "system",
-                content: "你是一位耐心的中文老师，请提取题干、选项，并给出分步骤解析与答案说明。",
+        async function analyzeImage() {
+          if (!lastImageUrl) {
+            setStatus("请先生成题目后再尝试 AI 解析。");
+            return;
+          }
+          const apiUrl = (apiUrlInput.value || DEFAULT_API_URL).trim();
+          const apiKey = apiKeyInput.value.trim();
+          if (!apiKey) {
+            setStatus("请填写 API Key（仅在本地使用，不会上传保存）。");
+            return;
+          }
+          analyzeBtn.disabled = true;
+          updateAnalysis("AI 正在解题，请稍候…");
+          setStatus("正在向 AI 请求解析…");
+          startProgress("AI 正在解析题目…", 15);
+          easeProgress(88, 1.2, 320);
+          try {
+            const response = await fetch(apiUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
               },
-              {
-                role: "user",
-                content: [
+              body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [
+                  {
+                    role: "system",
+                    content: "你是一位耐心的中文老师，请提取题干、选项，并给出分步骤解析与答案说明。",
+                  },
+                  {
+                    role: "user",
+                    content: [
                   { type: "text", text: "请识别截图中的题目并给出答案与解析。" },
                   { type: "image_url", image_url: { url: lastImageUrl } },
                 ],
-              },
-            ],
-            max_tokens: 700,
-          }),
+                  },
+                ],
+                max_tokens: 700,
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status} - ${await response.text()}`);
+            }
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content || "未获取到结果，请稍后重试。";
+            updateAnalysis(content);
+            setStatus("解析完成，可继续随机出题。");
+            finishProgress("AI 解析完成");
+          } catch (error) {
+            console.error(error);
+            updateAnalysis("解析失败，请检查网络、接口地址或跨域设置。");
+            setStatus("AI 解析失败，查看控制台了解详情。");
+            finishProgress("AI 解析失败");
+          } finally {
+            analyzeBtn.disabled = false;
+          }
+        }
+
+        fileInput.addEventListener("change", (event) => {
+          const [file] = event.target.files;
+          handleFileSelection(file);
         });
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status} - ${await response.text()}`);
-        }
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || "未获取到结果，请稍后重试。";
-        updateAnalysis(content);
-        setStatus("解析完成，可继续随机出题。");
-        finishProgress("AI 解析完成");
-      } catch (error) {
+        ["dragenter", "dragover"].forEach((evtName) => {
+          document.addEventListener(evtName, (event) => {
+            event.preventDefault();
+            app.dataset.dragging = "true";
+          });
+        });
+
+        ["dragleave", "drop"].forEach((evtName) => {
+          document.addEventListener(evtName, (event) => {
+            event.preventDefault();
+            app.dataset.dragging = "false";
+          });
+        });
+
+        document.addEventListener("drop", (event) => {
+          const file = event.dataTransfer?.files?.[0];
+          handleFileSelection(file);
+        });
+
+        randomBtn.addEventListener("click", () => {
+          randomBtn.disabled = true;
+          showRandomPage().finally(() => {
+            randomBtn.disabled = false;
+          });
+        });
+
+        saveBtn.addEventListener("click", downloadImage);
+        analyzeBtn.addEventListener("click", analyzeImage);
+      })
+      .catch((error) => {
         console.error(error);
-        updateAnalysis("解析失败，请检查网络、接口地址或跨域设置。");
-        setStatus("AI 解析失败，查看控制台了解详情。");
-        finishProgress("AI 解析失败");
-      } finally {
-        analyzeBtn.disabled = false;
-      }
-    }
-
-    fileInput.addEventListener("change", (event) => {
-      const [file] = event.target.files;
-      handleFileSelection(file);
-    });
-
-    ["dragenter", "dragover"].forEach((evtName) => {
-      document.addEventListener(evtName, (event) => {
-        event.preventDefault();
-        app.dataset.dragging = "true";
+        const statusEl = document.getElementById("status");
+        const preview = document.getElementById("preview");
+        if (statusEl) {
+          statusEl.dataset.state = "error";
+          statusEl.querySelector("span:last-child").textContent =
+            "pdf.js 加载失败，请检查网络或确认解压包包含 script/pdfjs 目录后重新打开。";
+        }
+        if (preview) {
+          preview.innerHTML = '<div class="empty">无法加载依赖，请联网重试，或确保本地文件夹内存在 script/pdfjs/pdf.min.js 与 pdf.worker.min.js。</div>';
+        }
       });
-    });
-
-    ["dragleave", "drop"].forEach((evtName) => {
-      document.addEventListener(evtName, (event) => {
-        event.preventDefault();
-        app.dataset.dragging = "false";
-      });
-    });
-
-    document.addEventListener("drop", (event) => {
-      const file = event.dataTransfer?.files?.[0];
-      handleFileSelection(file);
-    });
-
-    randomBtn.addEventListener("click", () => {
-      randomBtn.disabled = true;
-      showRandomPage().finally(() => {
-        randomBtn.disabled = false;
-      });
-    });
-
-    saveBtn.addEventListener("click", downloadImage);
-    analyzeBtn.addEventListener("click", analyzeImage);
   </script>
 </body>
 </html>
