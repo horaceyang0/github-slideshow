@@ -7,13 +7,14 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <style>
     :root {
-      color-scheme: light dark;
+      color-scheme: light;
     }
     body {
       margin: 0;
-      font-family: "Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-      background: radial-gradient(circle at 20% 20%, #f7f9fc 0%, #eef1f7 35%, #d9e1f2 100%);
-      color: #1f2937;
+      font-family: "STKaiti", "Noto Serif SC", "PingFang SC", "Hiragino Sans GB", serif;
+      background: radial-gradient(circle at 20% 20%, rgba(0,0,0,0.02), rgba(0,0,0,0.08)),
+        linear-gradient(135deg, #f8f5ec 0%, #f2ede0 50%, #f8f5ec 100%);
+      color: #1b1a16;
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -31,146 +32,238 @@
       border: 0;
     }
     .app {
-      width: min(960px, 100%);
-      background: rgba(255, 255, 255, 0.9);
-      box-shadow: 0 12px 40px rgba(31, 41, 55, 0.12);
-      border-radius: 16px;
-      padding: 24px;
-      backdrop-filter: blur(8px);
+      width: min(980px, 100%);
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+      border-radius: 18px;
+      padding: 26px;
+      position: relative;
+      overflow: hidden;
+      border: 2px solid rgba(0, 0, 0, 0.08);
       transition: box-shadow 0.2s ease, transform 0.15s ease;
     }
+    .app::before, .app::after {
+      content: "";
+      position: absolute;
+      pointer-events: none;
+      inset: 10px;
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 12px;
+    }
+    .app::after {
+      inset: 16px;
+      border-style: dashed;
+      border-color: rgba(0,0,0,0.04);
+    }
     .app[data-dragging="true"] {
-      box-shadow: 0 16px 48px rgba(16, 185, 129, 0.4);
+      box-shadow: 0 24px 72px rgba(0, 0, 0, 0.25);
       transform: translateY(-2px);
     }
     h1 {
       margin-top: 0;
-      font-size: 26px;
-      letter-spacing: 0.5px;
+      font-size: 28px;
+      letter-spacing: 2px;
+      position: relative;
+      display: inline-block;
+      padding: 6px 10px;
+      background: rgba(0,0,0,0.04);
+      border-radius: 10px;
     }
     p.description {
       margin: 6px 0 18px;
-      color: #4b5563;
-      line-height: 1.6;
+      color: #3f3b30;
+      line-height: 1.7;
     }
     .controls {
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: 1fr auto auto auto;
       gap: 12px;
       align-items: center;
       margin-bottom: 16px;
     }
     input[type="file"] {
-      padding: 10px;
-      border: 1px dashed #9ca3af;
-      border-radius: 10px;
-      background: #f8fafc;
+      padding: 12px 14px;
+      border: 1px dashed #948a6d;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.92);
+      font-family: inherit;
+      color: #1b1a16;
     }
     button {
       border: none;
-      padding: 12px 16px;
-      border-radius: 10px;
+      padding: 12px 18px;
+      border-radius: 12px;
       cursor: pointer;
-      font-weight: 600;
-      background: linear-gradient(120deg, #2563eb, #10b981);
-      color: white;
-      box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: linear-gradient(135deg, #1f1c18 0%, #403b36 50%, #1f1c18 100%);
+      color: #f7f3ea;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
       transition: transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     }
     button[disabled] {
-      opacity: 0.55;
+      opacity: 0.45;
       cursor: not-allowed;
       box-shadow: none;
     }
     button:not([disabled]):hover {
-      transform: translateY(-1px);
-      box-shadow: 0 12px 26px rgba(16, 185, 129, 0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.25);
     }
     .status {
-      font-weight: 600;
-      color: #1f2937;
+      font-weight: 700;
+      color: #1b1a16;
       margin-bottom: 14px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.04);
     }
     .status .dot {
-      width: 12px;
-      height: 12px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
-      background: #10b981;
+      background: #1f1c18;
       display: inline-block;
-      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
+      box-shadow: 0 0 0 5px rgba(0, 0, 0, 0.08);
     }
     .card {
-      background: #0f172a;
-      color: #e5e7eb;
-      border-radius: 14px;
-      padding: 16px;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      background: rgba(0, 0, 0, 0.78);
+      color: #f6f3e6;
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
       margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::after {
+      content: "墨";
+      position: absolute;
+      right: 16px;
+      bottom: -6px;
+      font-size: 48px;
+      color: rgba(255,255,255,0.08);
+      transform: rotate(-8deg);
     }
     .card h2 {
       margin: 0 0 8px;
-      font-size: 18px;
+      font-size: 19px;
+      letter-spacing: 1px;
     }
     .card p {
       margin: 0;
-      color: #cbd5e1;
+      color: #e8e1cf;
+      line-height: 1.55;
+    }
+    .panel {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .panel h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      letter-spacing: 1px;
+    }
+    .panel .hint {
+      color: #4b463a;
+      margin-bottom: 10px;
       line-height: 1.5;
     }
+    .panel .inputs {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .panel input[type="password"], .panel input[type="text"] {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.12);
+      font-family: inherit;
+      background: rgba(255,255,255,0.85);
+    }
     .preview {
-      background: #0b1120;
-      border-radius: 14px;
+      background: #0c0c0c;
+      border-radius: 16px;
       padding: 16px;
       display: grid;
       gap: 12px;
+      color: #f6f6f6;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
     }
     .preview img {
       max-width: 100%;
-      border-radius: 10px;
-      background: #111827;
-      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
+      border-radius: 12px;
+      background: #111;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
     }
     .caption {
       display: flex;
       justify-content: space-between;
-      color: #e5e7eb;
+      color: #f6f6f6;
       font-size: 14px;
-      opacity: 0.82;
+      opacity: 0.86;
+    }
+    .analysis-output {
+      background: rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 12px;
+      white-space: pre-wrap;
+      line-height: 1.6;
+      font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+      color: #f6f6f6;
+      border: 1px solid rgba(255,255,255,0.08);
     }
     .empty {
       text-align: center;
-      color: #9ca3af;
-      border: 2px dashed #d1d5db;
+      color: #c5c1b3;
+      border: 2px dashed rgba(255,255,255,0.15);
       padding: 24px;
       border-radius: 12px;
+      background: rgba(0,0,0,0.45);
     }
-    @media (max-width: 720px) {
+    @media (max-width: 840px) {
       body { padding: 12px; }
       .controls { grid-template-columns: 1fr; }
-      button { width: 100%; }
+      button, input[type="file"] { width: 100%; }
+      .panel .inputs { grid-template-columns: 1fr; }
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.9.179/build/pdf.min.js"></script>
 </head>
 <body>
   <div class="app">
-    <h1>PDF 题库随机出题（截图模式）</h1>
-    <p class="description">上传 PDF 题库后，系统会随机截取页面并以图片形式出题，适合快速刷题与记忆。</p>
+    <h1>PDF 题库随机出题（墨韵版）</h1>
+    <p class="description">上传 PDF 题库后，系统会随机截取页面并以图片形式出题；加入水墨质感界面与「AI 解析」按钮，边刷题边看讲解。</p>
 
     <div class="controls">
       <label for="fileInput" class="sr-only">选择 PDF 题库</label>
       <input type="file" id="fileInput" accept="application/pdf,.pdf">
       <button id="randomBtn" disabled>随机出题</button>
       <button id="saveBtn" disabled>下载当前截图</button>
+      <button id="analyzeBtn" disabled>AI 解析</button>
     </div>
 
     <div class="status" id="status" aria-live="polite"><span class="dot"></span><span>等待上传 PDF 题库…</span></div>
 
     <div class="card">
       <h2>使用步骤</h2>
-      <p>1）选择或拖拽 PDF 题库文件。 2）等待解析完成。 3）点击“随机出题”获取一题截图，或者“下载当前截图”保存图片。</p>
+      <p>1）选择或拖拽 PDF 题库文件。 2）等待解析完成。 3）点击“随机出题”获取一题截图；想要讲解时输入 API Key，点击「AI 解析」。</p>
+    </div>
+
+    <div class="panel">
+      <h3>AI 解析配置（本地浏览器直连）</h3>
+      <div class="hint">填入支持视觉的 OpenAI 兼容接口信息（如 gpt-4o-mini）。请求在本地浏览器直接发出，确保网络允许跨域访问。</div>
+      <div class="inputs">
+        <input type="text" id="apiUrl" placeholder="接口地址，默认 https://api.openai.com/v1/chat/completions">
+        <input type="password" id="apiKey" placeholder="API Key（仅保存在本地内存）">
+      </div>
     </div>
 
     <div class="preview" id="preview">
@@ -186,11 +279,17 @@
     const fileInput = document.getElementById("fileInput");
     const randomBtn = document.getElementById("randomBtn");
     const saveBtn = document.getElementById("saveBtn");
+    const analyzeBtn = document.getElementById("analyzeBtn");
     const statusEl = document.getElementById("status");
     const preview = document.getElementById("preview");
     const app = document.querySelector(".app");
     const canvas = document.getElementById("renderCanvas");
     const ctx = canvas.getContext("2d");
+    const apiUrlInput = document.getElementById("apiUrl");
+    const apiKeyInput = document.getElementById("apiKey");
+
+    const DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
+    apiUrlInput.value = DEFAULT_API_URL;
 
     let pdfDoc = null;
     let lastImageUrl = "";
@@ -206,6 +305,7 @@
       lastImageUrl = "";
       randomBtn.disabled = true;
       saveBtn.disabled = true;
+      analyzeBtn.disabled = true;
       preview.innerHTML = `<div class="empty">${message}</div>`;
     }
 
@@ -233,6 +333,7 @@
       setStatus(`已加载「${file.name}」，共 ${pdfDoc.numPages} 页，可点击“随机出题”。`);
       randomBtn.disabled = true;
       saveBtn.disabled = false;
+      analyzeBtn.disabled = true;
       await showRandomPage();
       randomBtn.disabled = false;
     }
@@ -251,7 +352,9 @@
       preview.innerHTML = `
         <div class="caption"><span>随机题目</span><span>第 ${pageNumber} 页 / 共 ${pdfDoc.numPages} 页</span></div>
         <img src="${lastImageUrl}" alt="第 ${pageNumber} 页截图">
+        <div class="analysis-output" id="analysisOutput">AI 解析尚未开始，点击上方按钮获取讲解。</div>
       `;
+      analyzeBtn.disabled = false;
       setStatus("已出题，点击按钮可继续随机切换。");
     }
 
@@ -276,11 +379,79 @@
       setStatus("正在解析 PDF…");
       randomBtn.disabled = true;
       saveBtn.disabled = true;
+      analyzeBtn.disabled = true;
       loadPdf(file).catch((error) => {
         console.error(error);
         setStatus("解析失败，请确认文件为有效的 PDF。");
         preview.innerHTML = '<div class="empty">加载失败，请重新上传。</div>';
       });
+    }
+
+    function getAnalysisOutput() {
+      return document.getElementById("analysisOutput");
+    }
+
+    function updateAnalysis(text) {
+      const output = getAnalysisOutput();
+      if (output) {
+        output.textContent = text;
+      }
+    }
+
+    async function analyzeImage() {
+      if (!lastImageUrl) {
+        setStatus("请先生成题目后再尝试 AI 解析。");
+        return;
+      }
+      const apiUrl = (apiUrlInput.value || DEFAULT_API_URL).trim();
+      const apiKey = apiKeyInput.value.trim();
+      if (!apiKey) {
+        setStatus("请填写 API Key（仅在本地使用，不会上传保存）。");
+        return;
+      }
+      analyzeBtn.disabled = true;
+      updateAnalysis("AI 正在解题，请稍候…");
+      setStatus("正在向 AI 请求解析…");
+      try {
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: "你是一位耐心的中文老师，请提取题干、选项，并给出分步骤解析与答案说明。",
+              },
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "请识别截图中的题目并给出答案与解析。" },
+                  { type: "image_url", image_url: { url: lastImageUrl } },
+                ],
+              },
+            ],
+            max_tokens: 700,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} - ${await response.text()}`);
+        }
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || "未获取到结果，请稍后重试。";
+        updateAnalysis(content);
+        setStatus("解析完成，可继续随机出题。");
+      } catch (error) {
+        console.error(error);
+        updateAnalysis("解析失败，请检查网络、接口地址或跨域设置。");
+        setStatus("AI 解析失败，查看控制台了解详情。");
+      } finally {
+        analyzeBtn.disabled = false;
+      }
     }
 
     fileInput.addEventListener("change", (event) => {
@@ -315,6 +486,7 @@
     });
 
     saveBtn.addEventListener("click", downloadImage);
+    analyzeBtn.addEventListener("click", analyzeImage);
   </script>
 </body>
 </html>
