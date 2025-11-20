@@ -165,6 +165,53 @@
       grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 10px;
     }
+    .progress-card {
+      margin-top: 6px;
+      padding: 14px 16px 12px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(0,0,0,0.75), rgba(0,0,0,0.6)), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='120' viewBox='0 0 200 120'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23ffffff' stop-opacity='0.14' offset='0'/%3E%3Cstop stop-color='%23ffffff' stop-opacity='0' offset='1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 30c60 16 120-10 200 6v50C120 66 60 90 0 74Z' fill='url(%23g)'/%3E%3C/svg%3E");
+      color: #f2f0e9;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 16px 30px rgba(0,0,0,0.25);
+      display: grid;
+      gap: 8px;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    .progress-card[data-active="true"] {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .progress-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      letter-spacing: 1px;
+      font-size: 14px;
+    }
+    .progress-rail {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.12);
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #c8b58b, #f6e7c7, #d8c7a1);
+      box-shadow: 0 0 12px rgba(214,191,143,0.8);
+      transition: width 0.35s ease;
+    }
+    .progress-note {
+      font-size: 13px;
+      color: #e6e1d4;
+      opacity: 0.9;
+    }
     input[type="file"], .panel input[type="password"], .panel input[type="text"] {
       padding: 12px 14px;
       border: 1px solid rgba(0, 0, 0, 0.12);
@@ -395,6 +442,17 @@
 
         <div class="status" id="status" aria-live="polite"><span class="dot"></span><span>等待上传 PDF 题库…</span></div>
 
+        <div class="progress-card" id="progressCard" aria-live="polite" data-active="false">
+          <div class="progress-head">
+            <span>解析进度</span>
+            <span id="progressValue">0%</span>
+          </div>
+          <div class="progress-rail" aria-hidden="true">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <div class="progress-note" id="progressNote">等待任务开始…</div>
+        </div>
+
         <div class="card">
           <h2>使用步骤</h2>
           <p>1）选择或拖拽 PDF 题库文件。 2）等待解析完成。 3）点击“随机出题”获取一题截图；想要讲解时输入 API Key，点击「AI 解析」。</p>
@@ -438,6 +496,10 @@
     const ctx = canvas.getContext("2d");
     const apiUrlInput = document.getElementById("apiUrl");
     const apiKeyInput = document.getElementById("apiKey");
+    const progressCard = document.getElementById("progressCard");
+    const progressFill = document.getElementById("progressFill");
+    const progressValue = document.getElementById("progressValue");
+    const progressNote = document.getElementById("progressNote");
 
     const DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
     apiUrlInput.value = DEFAULT_API_URL;
@@ -445,9 +507,43 @@
     let pdfDoc = null;
     let lastImageUrl = "";
     let usedPages = new Set();
+    let progressTimer = null;
+    let currentProgress = 0;
 
     function setStatus(message) {
       statusEl.querySelector("span:last-child").textContent = message;
+    }
+
+    function updateProgress(percent = 0, note = "") {
+      currentProgress = Math.max(0, Math.min(100, percent));
+      progressFill.style.width = `${currentProgress}%`;
+      progressValue.textContent = `${Math.round(currentProgress)}%`;
+      if (note) {
+        progressNote.textContent = note;
+      }
+    }
+
+    function startProgress(note = "准备解析…", initial = 8) {
+      clearInterval(progressTimer);
+      progressCard.dataset.active = "true";
+      updateProgress(initial, note);
+    }
+
+    function easeProgress(target = 85, step = 1.5, interval = 280) {
+      clearInterval(progressTimer);
+      progressTimer = setInterval(() => {
+        if (currentProgress >= target) return;
+        updateProgress(currentProgress + step);
+      }, interval);
+    }
+
+    function finishProgress(note = "解析完成", delay = 900) {
+      clearInterval(progressTimer);
+      updateProgress(100, note);
+      setTimeout(() => {
+        progressCard.dataset.active = "false";
+        updateProgress(0, "等待任务开始…");
+      }, delay);
     }
 
     function resetState(message = "等待上传 PDF 题库…") {
@@ -479,6 +575,8 @@
 
     async function loadPdf(file) {
       const fileData = await file.arrayBuffer();
+      startProgress("正在解析 PDF…", 12);
+      easeProgress(82);
       pdfDoc = await pdfjsLib.getDocument({ data: fileData }).promise;
       usedPages.clear();
       setStatus(`已加载「${file.name}」，共 ${pdfDoc.numPages} 页，可点击“随机出题”。`);
@@ -487,6 +585,7 @@
       analyzeBtn.disabled = true;
       await showRandomPage();
       randomBtn.disabled = false;
+      finishProgress("PDF 解析完成");
     }
 
     async function showRandomPage() {
@@ -535,6 +634,7 @@
         console.error(error);
         setStatus("解析失败，请确认文件为有效的 PDF。");
         preview.innerHTML = '<div class="empty">加载失败，请重新上传。</div>';
+        finishProgress("解析失败");
       });
     }
 
@@ -563,6 +663,8 @@
       analyzeBtn.disabled = true;
       updateAnalysis("AI 正在解题，请稍候…");
       setStatus("正在向 AI 请求解析…");
+      startProgress("AI 正在解析题目…", 15);
+      easeProgress(88, 1.2, 320);
       try {
         const response = await fetch(apiUrl, {
           method: "POST",
@@ -596,10 +698,12 @@
         const content = data.choices?.[0]?.message?.content || "未获取到结果，请稍后重试。";
         updateAnalysis(content);
         setStatus("解析完成，可继续随机出题。");
+        finishProgress("AI 解析完成");
       } catch (error) {
         console.error(error);
         updateAnalysis("解析失败，请检查网络、接口地址或跨域设置。");
         setStatus("AI 解析失败，查看控制台了解详情。");
+        finishProgress("AI 解析失败");
       } finally {
         analyzeBtn.disabled = false;
       }
