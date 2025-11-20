@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF 题库随机出题</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+      background: radial-gradient(circle at 20% 20%, #f7f9fc 0%, #eef1f7 35%, #d9e1f2 100%);
+      color: #1f2937;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+    .app {
+      width: min(960px, 100%);
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 12px 40px rgba(31, 41, 55, 0.12);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(8px);
+      transition: box-shadow 0.2s ease, transform 0.15s ease;
+    }
+    .app[data-dragging="true"] {
+      box-shadow: 0 16px 48px rgba(16, 185, 129, 0.4);
+      transform: translateY(-2px);
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 26px;
+      letter-spacing: 0.5px;
+    }
+    p.description {
+      margin: 6px 0 18px;
+      color: #4b5563;
+      line-height: 1.6;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    input[type="file"] {
+      padding: 10px;
+      border: 1px dashed #9ca3af;
+      border-radius: 10px;
+      background: #f8fafc;
+    }
+    button {
+      border: none;
+      padding: 12px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      background: linear-gradient(120deg, #2563eb, #10b981);
+      color: white;
+      box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+      transition: transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    }
+    button[disabled] {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    button:not([disabled]):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(16, 185, 129, 0.35);
+    }
+    .status {
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #10b981;
+      display: inline-block;
+      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
+    }
+    .card {
+      background: #0f172a;
+      color: #e5e7eb;
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+    .card p {
+      margin: 0;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    .preview {
+      background: #0b1120;
+      border-radius: 14px;
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .preview img {
+      max-width: 100%;
+      border-radius: 10px;
+      background: #111827;
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
+    }
+    .caption {
+      display: flex;
+      justify-content: space-between;
+      color: #e5e7eb;
+      font-size: 14px;
+      opacity: 0.82;
+    }
+    .empty {
+      text-align: center;
+      color: #9ca3af;
+      border: 2px dashed #d1d5db;
+      padding: 24px;
+      border-radius: 12px;
+    }
+    @media (max-width: 720px) {
+      body { padding: 12px; }
+      .controls { grid-template-columns: 1fr; }
+      button { width: 100%; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.9.179/build/pdf.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <h1>PDF 题库随机出题（截图模式）</h1>
+    <p class="description">上传 PDF 题库后，系统会随机截取页面并以图片形式出题，适合快速刷题与记忆。</p>
+
+    <div class="controls">
+      <label for="fileInput" class="sr-only">选择 PDF 题库</label>
+      <input type="file" id="fileInput" accept="application/pdf,.pdf">
+      <button id="randomBtn" disabled>随机出题</button>
+      <button id="saveBtn" disabled>下载当前截图</button>
+    </div>
+
+    <div class="status" id="status" aria-live="polite"><span class="dot"></span><span>等待上传 PDF 题库…</span></div>
+
+    <div class="card">
+      <h2>使用步骤</h2>
+      <p>1）选择或拖拽 PDF 题库文件。 2）等待解析完成。 3）点击“随机出题”获取一题截图，或者“下载当前截图”保存图片。</p>
+    </div>
+
+    <div class="preview" id="preview">
+      <div class="empty">尚未加载题库，上传或拖拽 PDF 后即可开始练习。</div>
+    </div>
+  </div>
+
+  <canvas id="renderCanvas" style="display:none;"></canvas>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.9.179/build/pdf.worker.min.js";
+
+    const fileInput = document.getElementById("fileInput");
+    const randomBtn = document.getElementById("randomBtn");
+    const saveBtn = document.getElementById("saveBtn");
+    const statusEl = document.getElementById("status");
+    const preview = document.getElementById("preview");
+    const app = document.querySelector(".app");
+    const canvas = document.getElementById("renderCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let pdfDoc = null;
+    let lastImageUrl = "";
+    let usedPages = new Set();
+
+    function setStatus(message) {
+      statusEl.querySelector("span:last-child").textContent = message;
+    }
+
+    function resetState(message = "等待上传 PDF 题库…") {
+      pdfDoc = null;
+      usedPages = new Set();
+      lastImageUrl = "";
+      randomBtn.disabled = true;
+      saveBtn.disabled = true;
+      preview.innerHTML = `<div class="empty">${message}</div>`;
+    }
+
+    function isPdfFile(file) {
+      return file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
+    }
+
+    function pickRandomPageNumber() {
+      if (!pdfDoc) return null;
+      if (usedPages.size === pdfDoc.numPages) {
+        usedPages.clear();
+      }
+      let pageNumber;
+      do {
+        pageNumber = Math.floor(Math.random() * pdfDoc.numPages) + 1;
+      } while (usedPages.has(pageNumber));
+      usedPages.add(pageNumber);
+      return pageNumber;
+    }
+
+    async function loadPdf(file) {
+      const fileData = await file.arrayBuffer();
+      pdfDoc = await pdfjsLib.getDocument({ data: fileData }).promise;
+      usedPages.clear();
+      setStatus(`已加载「${file.name}」，共 ${pdfDoc.numPages} 页，可点击“随机出题”。`);
+      randomBtn.disabled = true;
+      saveBtn.disabled = false;
+      await showRandomPage();
+      randomBtn.disabled = false;
+    }
+
+    async function showRandomPage() {
+      if (!pdfDoc) return;
+      const pageNumber = pickRandomPageNumber();
+      if (!pageNumber) return;
+      setStatus(`正在生成第 ${pageNumber} 页的截图（已出题 ${usedPages.size} / ${pdfDoc.numPages} 页）…`);
+      const page = await pdfDoc.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 1.5 });
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      lastImageUrl = canvas.toDataURL("image/png");
+      preview.innerHTML = `
+        <div class="caption"><span>随机题目</span><span>第 ${pageNumber} 页 / 共 ${pdfDoc.numPages} 页</span></div>
+        <img src="${lastImageUrl}" alt="第 ${pageNumber} 页截图">
+      `;
+      setStatus("已出题，点击按钮可继续随机切换。");
+    }
+
+    function downloadImage() {
+      if (!lastImageUrl) return;
+      const link = document.createElement("a");
+      link.href = lastImageUrl;
+      link.download = "quiz-screenshot.png";
+      link.click();
+    }
+
+    function handleFileSelection(file) {
+      if (!file) {
+        setStatus("未检测到文件，请重新尝试。");
+        return;
+      }
+      if (!isPdfFile(file)) {
+        setStatus("仅支持 PDF 文件，请重新选择。");
+        resetState("仅支持 PDF 文件，请重新选择。");
+        return;
+      }
+      setStatus("正在解析 PDF…");
+      randomBtn.disabled = true;
+      saveBtn.disabled = true;
+      loadPdf(file).catch((error) => {
+        console.error(error);
+        setStatus("解析失败，请确认文件为有效的 PDF。");
+        preview.innerHTML = '<div class="empty">加载失败，请重新上传。</div>';
+      });
+    }
+
+    fileInput.addEventListener("change", (event) => {
+      const [file] = event.target.files;
+      handleFileSelection(file);
+    });
+
+    ["dragenter", "dragover"].forEach((evtName) => {
+      document.addEventListener(evtName, (event) => {
+        event.preventDefault();
+        app.dataset.dragging = "true";
+      });
+    });
+
+    ["dragleave", "drop"].forEach((evtName) => {
+      document.addEventListener(evtName, (event) => {
+        event.preventDefault();
+        app.dataset.dragging = "false";
+      });
+    });
+
+    document.addEventListener("drop", (event) => {
+      const file = event.dataTransfer?.files?.[0];
+      handleFileSelection(file);
+    });
+
+    randomBtn.addEventListener("click", () => {
+      randomBtn.disabled = true;
+      showRandomPage().finally(() => {
+        randomBtn.disabled = false;
+      });
+    });
+
+    saveBtn.addEventListener("click", downloadImage);
+  </script>
+</body>
+</html>
