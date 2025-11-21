@@ -444,6 +444,73 @@
       border-radius: 12px;
       background: rgba(0,0,0,0.38);
     }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+
+    .option-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .question-card {
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 10px 24px rgba(0,0,0,0.08);
+      margin-bottom: 12px;
+    }
+
+    .question-card .caption {
+      margin-bottom: 8px;
+    }
+
+    .question-card .options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .question-card .options label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,0,0,0.03);
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+    }
+
+    .question-card .options input[type="radio"] {
+      accent-color: #1f1a14;
+    }
+
+    .question-card .check-result {
+      margin-top: 8px;
+      font-weight: 600;
+      color: #2f241a;
+    }
+
+    .question-card[data-correct="true"] .check-result {
+      color: #2d7a32;
+    }
+
+    .question-card[data-correct="false"] .check-result {
+      color: #b04332;
+    }
+
+    .analysis-anchor {
+      scroll-margin-top: 80px;
+    }
     @media (max-width: 960px) {
       body { padding: 16px; }
       .layout { grid-template-columns: 1fr; }
@@ -517,11 +584,20 @@
       <div class="stack">
         <div class="controls">
           <label for="fileInput" class="sr-only">选择 PDF 题库</label>
-          <input type="file" id="fileInput" accept="application/pdf,.pdf">
+          <div class="settings-grid">
+            <input type="text" id="subjectInput" placeholder="科目（如：数学/英语）">
+            <input type="number" id="yearInput" placeholder="年份（如：2024）" min="1990" max="2100">
+            <input type="number" id="countInput" placeholder="随机出题数量" min="1" value="1">
+            <select id="bankSelect">
+              <option value="" selected>选择已载入的科目/年份</option>
+            </select>
+          </div>
+          <input type="file" id="fileInput" accept="application/pdf,.pdf" aria-label="上传题库 PDF">
+          <input type="file" id="answerInput" accept=".json,.csv,.txt" aria-label="上传答案文件">
           <div class="actions">
-            <button id="randomBtn" disabled>随机出题</button>
+            <button id="randomBtn" disabled>按年份随机出题</button>
             <button id="saveBtn" disabled>下载当前截图</button>
-            <button id="analyzeBtn" disabled>AI 解析</button>
+            <button id="analyzeBtn" disabled>AI 解析并跳转</button>
           </div>
         </div>
 
@@ -558,6 +634,7 @@
           <div class="preview-title">截图出题区</div>
           <div class="preview-status">支持拖拽上传 / 随机出题</div>
         </div>
+        <div id="analysisSection" class="analysis-anchor"></div>
         <div class="preview" id="preview">
           <div class="empty">尚未加载题库，上传或拖拽 PDF 后即可开始练习。</div>
         </div>
@@ -571,6 +648,7 @@
     window._pdfjsReady
       .then(() => {
         const fileInput = document.getElementById("fileInput");
+        const answerInput = document.getElementById("answerInput");
         const randomBtn = document.getElementById("randomBtn");
         const saveBtn = document.getElementById("saveBtn");
         const analyzeBtn = document.getElementById("analyzeBtn");
@@ -585,18 +663,72 @@
         const progressFill = document.getElementById("progressFill");
         const progressValue = document.getElementById("progressValue");
         const progressNote = document.getElementById("progressNote");
+        const subjectInput = document.getElementById("subjectInput");
+        const yearInput = document.getElementById("yearInput");
+        const countInput = document.getElementById("countInput");
+        const bankSelect = document.getElementById("bankSelect");
+        const analysisAnchor = document.getElementById("analysisSection");
 
         const DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions";
         apiUrlInput.value = DEFAULT_API_URL;
 
-        let pdfDoc = null;
+        const quizBanks = new Map();
+        let activeKey = "";
         let lastImageUrl = "";
-        let usedPages = new Set();
         let progressTimer = null;
         let currentProgress = 0;
+        const OPTIONS = ["A", "B", "C", "D", "E"];
+
+        function makeKey(subject, year) {
+          return `${subject}｜${year}`;
+        }
 
         function setStatus(message) {
           statusEl.querySelector("span:last-child").textContent = message;
+        }
+
+        function ensureMeta() {
+          const subject = subjectInput.value.trim();
+          const year = yearInput.value.trim();
+          if (!subject || !year) {
+            setStatus("请先填写科目与年份后再上传题库或答案。");
+            return null;
+          }
+          return { subject, year, key: makeKey(subject, year) };
+        }
+
+        function getActiveBank() {
+          return activeKey ? quizBanks.get(activeKey) : null;
+        }
+
+        function refreshBankOptions(selectedKey = activeKey) {
+          const current = bankSelect.value;
+          bankSelect.innerHTML = '<option value="">选择已载入的科目/年份</option>';
+          quizBanks.forEach((bank, key) => {
+            const option = document.createElement("option");
+            option.value = key;
+            option.textContent = `${bank.subject} - ${bank.year}`;
+            if (key === selectedKey || key === current) option.selected = true;
+            bankSelect.appendChild(option);
+          });
+        }
+
+        function setActiveKey(key) {
+          if (!quizBanks.has(key)) return;
+          activeKey = key;
+          const bank = quizBanks.get(key);
+          subjectInput.value = bank.subject;
+          yearInput.value = bank.year;
+          refreshBankOptions(key);
+          randomBtn.disabled = !bank.pdfDoc;
+          saveBtn.disabled = !lastImageUrl;
+          analyzeBtn.disabled = !lastImageUrl;
+          setStatus(
+            `已切换到「${bank.subject} · ${bank.year}」题库${bank.pdfDoc ? `，共 ${bank.pdfDoc.numPages} 页` : ""}。`
+          );
+          if (!bank.pdfDoc) {
+            resetPreview("已切换题库，请先上传对应 PDF 文件。");
+          }
         }
 
         function updateProgress(percent = 0, note = "") {
@@ -631,9 +763,7 @@
           }, delay);
         }
 
-        function resetState(message = "等待上传 PDF 题库…") {
-          pdfDoc = null;
-          usedPages = new Set();
+        function resetPreview(message = "等待上传 PDF 题库…") {
           lastImageUrl = "";
           randomBtn.disabled = true;
           saveBtn.disabled = true;
@@ -645,52 +775,174 @@
           return file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
         }
 
-        function pickRandomPageNumber() {
-          if (!pdfDoc) return null;
-          if (usedPages.size === pdfDoc.numPages) {
-            usedPages.clear();
+        function pickRandomPageNumber(bank) {
+          if (!bank?.pdfDoc) return null;
+          if (bank.usedPages.size === bank.pdfDoc.numPages) {
+            bank.usedPages.clear();
           }
           let pageNumber;
           do {
-            pageNumber = Math.floor(Math.random() * pdfDoc.numPages) + 1;
-          } while (usedPages.has(pageNumber));
-          usedPages.add(pageNumber);
+            pageNumber = Math.floor(Math.random() * bank.pdfDoc.numPages) + 1;
+          } while (bank.usedPages.has(pageNumber));
+          bank.usedPages.add(pageNumber);
           return pageNumber;
         }
 
-        async function loadPdf(file) {
+        function parseAnswerText(text) {
+          const answers = new Map();
+          try {
+            const json = JSON.parse(text);
+            const arr = Array.isArray(json) ? json : json.answers;
+            if (Array.isArray(arr)) {
+              arr.forEach((item) => {
+                const page = Number(item.page ?? item.pageNumber);
+                const answer = String(item.answer ?? item.correct ?? "").trim().toUpperCase();
+                if (page && answer) answers.set(page, answer[0]);
+              });
+            }
+          } catch (e) {
+            text
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .forEach((line) => {
+                const [p, a] = line.split(/[\t,|;]+/);
+                const page = Number(p);
+                const answer = (a || "").trim().toUpperCase();
+                if (page && answer) answers.set(page, answer[0]);
+              });
+          }
+          return answers;
+        }
+
+        async function loadAnswers(file, meta) {
+          if (!file) return;
+          const text = await file.text();
+          const answers = parseAnswerText(text);
+          const bank = quizBanks.get(meta.key) || {
+            subject: meta.subject,
+            year: meta.year,
+            usedPages: new Set(),
+            answers: new Map(),
+          };
+          bank.answers = answers;
+          quizBanks.set(meta.key, bank);
+          setActiveKey(meta.key);
+          setStatus(`已载入 ${answers.size} 条答案：${meta.subject} · ${meta.year}。`);
+          refreshBankOptions(meta.key);
+        }
+
+        async function loadPdf(file, meta) {
           const fileData = await file.arrayBuffer();
           startProgress("正在解析 PDF…", 12);
           easeProgress(82);
-          pdfDoc = await pdfjsLib.getDocument({ data: fileData }).promise;
-          usedPages.clear();
-          setStatus(`已加载「${file.name}」，共 ${pdfDoc.numPages} 页，可点击“随机出题”。`);
+          const pdfDoc = await pdfjsLib.getDocument({ data: fileData }).promise;
+          const bank = quizBanks.get(meta.key) || {
+            answers: new Map(),
+            usedPages: new Set(),
+          };
+          bank.pdfDoc = pdfDoc;
+          bank.fileName = file.name;
+          bank.subject = meta.subject;
+          bank.year = meta.year;
+          bank.usedPages = new Set();
+          quizBanks.set(meta.key, bank);
+          activeKey = meta.key;
+          refreshBankOptions(meta.key);
+          setStatus(`已加载「${file.name}」，科目 ${meta.subject}，年份 ${meta.year}，共 ${pdfDoc.numPages} 页。`);
           randomBtn.disabled = true;
-          saveBtn.disabled = false;
+          saveBtn.disabled = true;
           analyzeBtn.disabled = true;
-          await showRandomPage();
+          await showRandomQuestions();
           randomBtn.disabled = false;
           finishProgress("PDF 解析完成");
         }
 
-        async function showRandomPage() {
-          if (!pdfDoc) return;
-          const pageNumber = pickRandomPageNumber();
-          if (!pageNumber) return;
-          setStatus(`正在生成第 ${pageNumber} 页的截图（已出题 ${usedPages.size} / ${pdfDoc.numPages} 页）…`);
-          const page = await pdfDoc.getPage(pageNumber);
+        async function renderPageToImage(bank, pageNumber) {
+          const page = await bank.pdfDoc.getPage(pageNumber);
           const viewport = page.getViewport({ scale: 1.5 });
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           await page.render({ canvasContext: ctx, viewport }).promise;
-          lastImageUrl = canvas.toDataURL("image/png");
-          preview.innerHTML = `
-        <div class="caption"><span>随机题目</span><span>第 ${pageNumber} 页 / 共 ${pdfDoc.numPages} 页</span></div>
-        <img src="${lastImageUrl}" alt="第 ${pageNumber} 页截图">
-        <div class="analysis-output" id="analysisOutput">AI 解析尚未开始，点击上方按钮获取讲解。</div>
-      `;
-          analyzeBtn.disabled = false;
-          setStatus("已出题，点击按钮可继续随机切换。");
+          return canvas.toDataURL("image/png");
+        }
+
+        function renderQuestions(questions, bank) {
+          preview.innerHTML = "";
+          if (!questions.length) {
+            resetPreview("未能生成题目，请检查题库是否加载成功。");
+            return;
+          }
+          lastImageUrl = questions[0].imageUrl;
+          questions.forEach(({ pageNumber, imageUrl }, index) => {
+            const card = document.createElement("div");
+            card.className = "question-card";
+            card.dataset.page = pageNumber;
+            card.innerHTML = `
+              <div class="caption"><span>${bank.subject} · ${bank.year}</span><span>第 ${pageNumber} 页 / 共 ${bank.pdfDoc.numPages} 页</span></div>
+              <img src="${imageUrl}" alt="第 ${pageNumber} 页截图">
+            `;
+            const optionsWrap = document.createElement("div");
+            optionsWrap.className = "options";
+            OPTIONS.forEach((opt) => {
+              const label = document.createElement("label");
+              label.innerHTML = `<input type="radio" name="q${index}" value="${opt}"> <span>${opt}</span>`;
+              optionsWrap.appendChild(label);
+            });
+            const result = document.createElement("div");
+            result.className = "check-result";
+            result.textContent = bank.answers?.size ? "请选择答案（自动比对上传答案）" : "暂无上传答案，选项仅供练习。";
+            optionsWrap.addEventListener("change", (event) => {
+              const choice = event.target.value;
+              checkAnswer(bank, pageNumber, choice, card, result);
+            });
+            card.appendChild(optionsWrap);
+            card.appendChild(result);
+            preview.appendChild(card);
+          });
+
+          const analysisBlock = document.createElement("div");
+          analysisBlock.id = "analysisOutput";
+          analysisBlock.className = "analysis-output analysis-anchor";
+          analysisBlock.textContent = "AI 解析尚未开始，点击上方按钮获取讲解。";
+          preview.appendChild(analysisBlock);
+        }
+
+        function checkAnswer(bank, pageNumber, choice, card, resultEl) {
+          if (!choice) return;
+          const correct = bank.answers?.get(pageNumber);
+          if (!correct) {
+            resultEl.textContent = `已选 ${choice}，但尚未上传答案文件。`;
+            card.dataset.correct = "";
+            return;
+          }
+          const isCorrect = choice.toUpperCase()[0] === correct.toUpperCase()[0];
+          card.dataset.correct = String(isCorrect);
+          resultEl.textContent = isCorrect
+            ? `√ 选择正确（标准答案：${correct}）`
+            : `× 选择错误（标准答案：${correct}）`;
+        }
+
+        async function showRandomQuestions() {
+          const bank = getActiveBank();
+          if (!bank || !bank.pdfDoc) {
+            setStatus("请先上传并选择对应科目/年份的 PDF 题库。");
+            resetPreview("请先上传对应题库文件。");
+            return;
+          }
+          const count = Math.max(1, Math.min(Number(countInput.value) || 1, bank.pdfDoc.numPages));
+          const questions = [];
+          for (let i = 0; i < count; i += 1) {
+            const pageNumber = pickRandomPageNumber(bank);
+            if (!pageNumber) continue;
+            setStatus(`正在生成第 ${pageNumber} 页的截图（已出题 ${bank.usedPages.size} / ${bank.pdfDoc.numPages} 页）…`);
+            const imageUrl = await renderPageToImage(bank, pageNumber);
+            questions.push({ pageNumber, imageUrl });
+          }
+          renderQuestions(questions, bank);
+          analyzeBtn.disabled = !lastImageUrl;
+          saveBtn.disabled = !lastImageUrl;
+          setStatus(`已出题 ${questions.length} 道，点击按钮可继续随机切换或开始 AI 解析。`);
         }
 
         function downloadImage() {
@@ -702,20 +954,22 @@
         }
 
         function handleFileSelection(file) {
+          const meta = ensureMeta();
+          if (!meta) return;
           if (!file) {
             setStatus("未检测到文件，请重新尝试。");
             return;
           }
           if (!isPdfFile(file)) {
             setStatus("仅支持 PDF 文件，请重新选择。");
-            resetState("仅支持 PDF 文件，请重新选择。");
+            resetPreview("仅支持 PDF 文件，请重新选择。");
             return;
           }
-          setStatus("正在解析 PDF…");
+          setStatus(`正在解析 ${meta.subject} · ${meta.year} 的 PDF…`);
           randomBtn.disabled = true;
           saveBtn.disabled = true;
           analyzeBtn.disabled = true;
-          loadPdf(file).catch((error) => {
+          loadPdf(file, meta).catch((error) => {
             console.error(error);
             setStatus("解析失败，请确认文件为有效的 PDF。");
             preview.innerHTML = '<div class="empty">加载失败，请重新上传。</div>';
@@ -739,6 +993,7 @@
             setStatus("请先生成题目后再尝试 AI 解析。");
             return;
           }
+          analysisAnchor?.scrollIntoView({ behavior: "smooth", block: "start" });
           const apiUrl = (apiUrlInput.value || DEFAULT_API_URL).trim();
           const apiKey = apiKeyInput.value.trim();
           if (!apiKey) {
@@ -799,6 +1054,22 @@
           handleFileSelection(file);
         });
 
+        answerInput.addEventListener("change", (event) => {
+          const [file] = event.target.files;
+          const meta = ensureMeta();
+          if (!meta || !file) return;
+          loadAnswers(file, meta).catch((error) => {
+            console.error(error);
+            setStatus("答案文件解析失败，请确认为 JSON / CSV / TXT 格式。");
+          });
+        });
+
+        bankSelect.addEventListener("change", (event) => {
+          const key = event.target.value;
+          if (!key) return;
+          setActiveKey(key);
+        });
+
         ["dragenter", "dragover"].forEach((evtName) => {
           document.addEventListener(evtName, (event) => {
             event.preventDefault();
@@ -820,7 +1091,7 @@
 
         randomBtn.addEventListener("click", () => {
           randomBtn.disabled = true;
-          showRandomPage().finally(() => {
+          showRandomQuestions().finally(() => {
             randomBtn.disabled = false;
           });
         });
