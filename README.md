@@ -31,3 +31,16 @@ This course is using the :sparkles: open source project [reveal.js](https://gith
 页面内置 pdf.js，无需后台服务即可运行，适合快速刷题或制作题目卡片。
 
 > 小贴士：如直接双击打开出现跨域或加载失败提示，可在仓库根目录运行 `npx http-server . -p 8000` 后，通过浏览器访问 `http://localhost:8000/study-app.html`；或直接使用上面的桌面程序方式打开。
+
+### 重新生成本地 diff
+如果需要在本地重新生成近期涉及 Study App 的文件差异（不依赖 GitHub 视图），可运行：
+
+```bash
+bash script/regenerate-diff.sh # 默认生成 HEAD^..HEAD 的差异到 local-study-app.diff
+```
+
+可通过传参指定其他提交范围与输出路径，例如：
+
+```bash
+bash script/regenerate-diff.sh <起始提交> <目标提交> /tmp/my-diff.patch
+```
