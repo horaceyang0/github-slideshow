@@ -1,0 +1,14 @@
+{
+  "name": "ink-study-desktop",
+  "version": "1.0.0",
+  "description": "Electron wrapper for the ink-style study app that quizzes from PDF question banks.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^30.0.9"
+  }
+}

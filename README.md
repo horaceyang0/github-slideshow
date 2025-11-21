@@ -12,16 +12,22 @@ I'll meet you over there, can't wait to get started!
 
 This course is using the :sparkles: open source project [reveal.js](https://github.com/hakimel/reveal.js/). In some cases we’ve made changes to the history so it would behave during class, so head to the original project repo to learn more about the cool people behind this project.
 
-## PDF 题库随机出题页
+## PDF 题库随机出题页（网页 & 桌面程序）
 
-仓库新增了 `study-app.html`，提供网页端的“上传 PDF 题库并随机截图出题”能力：
+`study-app.html` 依旧提供网页端的“上传 PDF 题库并随机截图出题”体验，而 `desktop-app` 目录新增了 Electron 封装，方便一键运行：
 
+网页使用方法：
 1. 打开 `study-app.html`（推荐在本地静态服务器中访问以避免浏览器的本地文件安全限制）。
 2. 上传或拖拽你的 PDF 题库，等待解析完成。
 3. 点击“随机出题”即可从任意页面生成截图，配合“下载当前截图”保存题目图片。
 4. 若想要题目讲解，可在页面内填写支持视觉模型的 OpenAI 兼容接口地址与 API Key，点击“AI 解析”后会直接在浏览器调用接口生成解析，并配合进度条查看当前解析状态。
 5. 如果直接用 `file://` 双击打开，浏览器可能拦截 CDN worker 请求。页面会自动退回单线程解析，若仍遇到加载问题，可按 `script/pdfjs/README.txt` 提示下载本地备份。
 
+桌面程序使用方法：
+1. 确保已安装 Node.js，然后进入 `desktop-app` 目录执行 `npm install`（如网络限制导致下载 electron 失败，可根据本地源策略调整 registry 或离线缓存）。
+2. 运行 `npm start`，桌面窗口将直接打开父目录下的 `study-app.html`，无需再考虑浏览器的本地安全策略。
+3. 题库上传、随机出题、AI 解析与进度条等功能与网页端一致。
+
 页面内置 pdf.js，无需后台服务即可运行，适合快速刷题或制作题目卡片。
 
-> 小贴士：如直接双击打开出现跨域或加载失败提示，可在仓库根目录运行 `npx http-server . -p 8000` 后，通过浏览器访问 `http://localhost:8000/study-app.html`。
+> 小贴士：如直接双击打开出现跨域或加载失败提示，可在仓库根目录运行 `npx http-server . -p 8000` 后，通过浏览器访问 `http://localhost:8000/study-app.html`；或直接使用上面的桌面程序方式打开。

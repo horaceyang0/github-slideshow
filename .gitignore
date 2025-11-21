@@ -2,3 +2,6 @@ _site/
 .sass-cache/
 .jekyll-metadata
 .bundle
+
+# Desktop app build artifacts
+desktop-app/node_modules
