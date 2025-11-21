@@ -5,3 +5,7 @@ _site/
 
 # Desktop app build artifacts
 desktop-app/node_modules
+
+# Local distribution bundles
+local-dist/
+local-dist.zip

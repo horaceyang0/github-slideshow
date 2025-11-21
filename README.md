@@ -33,6 +33,19 @@ This course is using the :sparkles: open source project [reveal.js](https://gith
 
 > 小贴士：如直接双击打开出现跨域或加载失败提示，可在仓库根目录运行 `npx http-server . -p 8000` 后，通过浏览器访问 `http://localhost:8000/study-app.html`；或直接使用上面的桌面程序方式打开。
 
+### 一键生成本地离线包
+如需打包一份“可直接双击或拷贝分发”的本地项目，可在根目录运行：
+
+```bash
+bash script/build-local-package.sh           # 输出到 local-dist/ 并自动抓取 pdf.js 依赖，若有 zip 会生成 local-dist.zip
+INCLUDE_DESKTOP=true bash script/build-local-package.sh my-offline-build
+```
+
+- 默认会把 `study-app.html` 以及 `script/pdfjs`（含 README 与自动拉取的 pdf.js/worker）复制到 `local-dist/`。
+- 设置 `INCLUDE_DESKTOP=true` 时会一并复制 `desktop-app` 脚手架（不含 node_modules），方便在目标机器执行 `npm install && npm start` 打开桌面版。
+- 如果系统装有 `zip`，脚本会额外生成同名压缩包，便于传输。
+- 无法直连 npm CDN 时，可通过 `PDFJS_MIRROR=<自定义镜像>` 环境变量或按 `script/pdfjs/README.txt` 手动放入 pdf.js 文件，再重复打包。
+
 ### 重新生成本地 diff
 如果需要在本地重新生成近期涉及 Study App 的文件差异（不依赖 GitHub 视图），可运行：
 
