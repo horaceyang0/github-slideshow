@@ -1,13 +1,37 @@
-# Your GitHub Learning Lab Repository for Introducing GitHub
+# 3D Floor Plan Editor (Next.js + TypeScript)
 
-Welcome to **your** repository for your GitHub Learning Lab course. This repository will be used during the different activities that I will be guiding you through. See a word you don't understand? We've included an emoji 📖 next to some key terms. Click on it to see its definition.
+A modern, client-side floor plan editor that pairs a 2D HTML5 canvas drawing experience with a live 3D view powered by React Three Fiber. Draw walls with snapping, place doors and windows with normalized offsets, overlay trace images, and use undo/redo and JSON import/export to manage your designs.
 
-Oh! I haven't introduced myself...
+## Features
+- **2D Canvas Editor** with 0.5 m snapping grid, single canvas pointer handling, and trace-image overlay.
+- **Wall authoring** with editable thickness and height plus opening placement (doors/windows) along wall length.
+- **3D Visualization** using BoxGeometry walls (2.5 m default height), ground plane, ambient/directional light, and OrbitControls.
+- **History controls** with undo/redo backed by serialized state snapshots.
+- **JSON import/export** for portable floor plan data.
 
-I'm the GitHub Learning Lab bot and I'm here to help guide you in your journey to learn and master the various topics covered in this course. I will be using Issue and Pull Request comments to communicate with you. In fact, I already added an issue for you to check out.
+## Getting started
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Start the dev server:
+   ```bash
+   npm run dev
+   ```
+3. Open http://localhost:3000 to use the editor. Draw walls by clicking start/end points; select walls to adjust properties and add openings.
 
-![issue tab](https://lab.github.com/public/images/issue_tab.png)
+## Tech stack
+- Next.js (App Router), TypeScript, Tailwind CSS
+- React Three Fiber, Drei, Three.js
+- Lucide React for icons, Inter font
 
-I'll meet you over there, can't wait to get started!
+## Project structure
+- `app/` — App Router pages and global styles
+- `components/editor/` — 2D canvas editor
+- `components/three/` — 3D viewport components
+- `lib/` — state + history utilities
+- `types/` — shared floor plan types
 
-This course is using the :sparkles: open source project [reveal.js](https://github.com/hakimel/reveal.js/). In some cases we’ve made changes to the history so it would behave during class, so head to the original project repo to learn more about the cool people behind this project.
+## Notes
+- This is a client-side only experience; all editing and rendering happen in the browser.
+- Import/export uses clean JSON for walls, openings, and trace image metadata.
