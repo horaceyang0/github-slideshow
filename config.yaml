@@ -1,0 +1,86 @@
+weights:
+  rates_duration: 25
+  hedging_vol: 15
+  capital_buffer: 20
+  deposits_funding: 15
+  credit_default: 15
+  market_pricing: 10
+
+thresholds:
+  jgb40y_red: 4.50
+  jgb40y_orange: 4.20
+
+  slope_10_40_red_bp: 200
+  slope_10_40_orange_bp: 180
+
+  iv20y_red: 15.0
+  iv20y_orange: 12.0
+  iv20y_trigger: 10.0
+
+  uloss_cet1_orange: 15
+  uloss_cet1_red: 30
+  uloss_cet1_darkred: 40
+
+  deposit_beta_orange: 0.30
+  deposit_beta_red: 0.60
+
+  cds_orange_bp: 100
+  cds_red_bp: 140
+
+scoring:
+  rates_duration:
+    jgb40y:
+      green_max: 4.00
+      orange_max: 4.20
+      red_max: 4.50
+      max_points: 12
+    slope_10_40_bp:
+      green_max: 160
+      orange_max: 180
+      red_max: 200
+      max_points: 13
+
+  hedging_vol:
+    iv20y:
+      green_max: 8
+      orange_max: 12
+      red_max: 15
+      max_points: 15
+
+  capital_buffer:
+    uloss_cet1:
+      green_max: 15
+      orange_max: 30
+      red_max: 40
+      max_points: 20
+
+  deposits_funding:
+    deposit_beta:
+      green_max: 0.30
+      orange_max: 0.60
+      red_max: 0.90
+      max_points: 10
+    mmf_flow_dummy:
+      green_max: 0
+      orange_max: 1
+      red_max: 2
+      max_points: 5
+
+  credit_default:
+    sme_bankruptcy_yoy:
+      green_max: 5
+      orange_max: 15
+      red_max: 25
+      max_points: 10
+    cds_financial_bp:
+      green_max: 80
+      orange_max: 100
+      red_max: 140
+      max_points: 5
+
+  market_pricing:
+    bank_index_wow_pct:
+      green_min: -1
+      orange_min: -3
+      red_min: -5
+      max_points: 10
